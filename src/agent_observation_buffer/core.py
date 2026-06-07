@@ -286,7 +286,13 @@ class ObservationBuffer:
         for d in data.get("items", []):
             obs = Observation.from_dict(d)
             buf._items.append(obs)
-        buf._next_id = int(data.get("next_id", len(buf._items) + 1))
+        if "next_id" in data:
+            buf._next_id = int(data["next_id"])
+        else:
+            # Derive from the highest existing id so freshly added items can
+            # never collide with restored ones (ids may be non-contiguous,
+            # e.g. after max_size eviction).
+            buf._next_id = max((o.id for o in buf._items), default=0) + 1
         return buf
 
     def __repr__(self) -> str:

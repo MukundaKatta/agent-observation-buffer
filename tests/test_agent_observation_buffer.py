@@ -336,6 +336,40 @@ def test_to_dict_round_trip():
     assert restored.all()[1].expires_at == pytest.approx(5.0)
 
 
+def test_from_dict_uses_explicit_next_id():
+    data = {
+        "next_id": 10,
+        "items": [
+            {"id": 3, "text": "a", "tags": [], "created_at": 0.0, "expires_at": None},
+        ],
+    }
+    buf = ObservationBuffer.from_dict(data, clock=lambda: 0.0)
+    assert buf.add("new").id == 10
+
+
+def test_from_dict_without_next_id_avoids_id_collision():
+    # Items can have non-contiguous ids (e.g. after max_size eviction). When
+    # ``next_id`` is absent it must be derived from the highest existing id so
+    # newly added observations never collide with restored ones.
+    data = {
+        "max_size": 2,
+        "items": [
+            {"id": 2, "text": "b", "tags": [], "created_at": 0.0, "expires_at": None},
+            {"id": 3, "text": "c", "tags": [], "created_at": 0.0, "expires_at": None},
+        ],
+    }
+    buf = ObservationBuffer.from_dict(data, clock=lambda: 0.0)
+    new = buf.add("new")
+    assert new.id == 4
+    ids = [o.id for o in buf.all()]
+    assert len(ids) == len(set(ids))  # no duplicate ids
+
+
+def test_from_dict_without_next_id_empty():
+    buf = ObservationBuffer.from_dict({"items": []}, clock=lambda: 0.0)
+    assert buf.add("first").id == 1
+
+
 def test_repr():
     buf = ObservationBuffer(clock=lambda: 0.0)
     buf.add("Hello.")
